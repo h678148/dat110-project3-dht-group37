@@ -43,8 +43,17 @@ public class ChordLookup {
 		// if logic returns false; call findHighestPredecessor(key)
 		
 		// do highest_pred.findSuccessor(key) - This is a recursive call until logic returns true
-				
-		return null;					
+		NodeInterface succ = node.getSuccessor();
+	    BigInteger nodeID = node.getNodeID();
+	    BigInteger succID = succ.getNodeID();
+
+	    // Er key i intervallet (nodeID, succID]?
+	    if (Util.checkInterval(key, nodeID.add(BigInteger.ONE), succID.add(BigInteger.ONE))) {
+	        return succ;
+	    } else {
+	        NodeInterface highestPred = findHighestPredecessor(key);
+	        return highestPred.findSuccessor(key);  // 
+	    }
 	}
 	
 	/**
@@ -65,7 +74,25 @@ public class ChordLookup {
 		
 		// if logic returns true, then return the finger (means finger is the closest to key)
 		
-		return (NodeInterface) node;			
+		BigInteger nodeID = node.getNodeID();
+
+	    // Start fra siste entry i finger-tabellen
+	    for (int i = node.getFingerTable().size() - 1; i >= 0; i--) {
+	        try {
+	            NodeInterface finger = node.getFingerTable().get(i);
+	            BigInteger fingerID = finger.getNodeID();
+
+	            if (Util.checkInterval(fingerID, nodeID.add(BigInteger.ONE), ID.subtract(BigInteger.ONE))) {
+	                return finger;
+	            }
+	        } catch (Exception e) {
+	            // Hopper over fingre som kaster feil (kan være døde)
+	            continue;
+	        }
+	    }
+
+	    // Hvis ingen finger funker, returnerer denne noden selv
+	    return node;
 	}
 	
 	public void copyKeysFromSuccessor(NodeInterface succ) {

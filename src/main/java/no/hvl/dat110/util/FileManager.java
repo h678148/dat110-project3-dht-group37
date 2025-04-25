@@ -65,6 +65,14 @@ public class FileManager {
 		// hash the replica
 		
 		// store the hash in the replicafiles array.
+		
+		for (int i = 0; i < numReplicas; i++) {
+	        String replica = filename + i;
+
+	        BigInteger hash = Hash.hashOf(replica);
+
+	        replicafiles[i] = hash;
+	    }
 	}
 	
     /**
@@ -97,7 +105,36 @@ public class FileManager {
     	// call the saveFileContent() on the successor and set isPrimary=true if logic above is true otherwise set isPrimary=false
     	
     	// increment counter
-		return counter;
+    	
+    	createReplicaFiles();
+        activeNodesforFile = new HashSet<>();
+
+        for (int i = 0; i < numReplicas; i++) {
+            BigInteger replicaHash = replicafiles[i];
+            NodeInterface succ = chordnode.findSuccessor(replicaHash);
+
+            if (succ != null) {
+                succ.addKey(replicaHash);
+
+                boolean isPrimary = (i == index); // Randomly assign primary for this replica
+
+                succ.saveFileContent(filename, replicaHash, bytesOfFile, isPrimary);
+
+                Message msg = new Message();
+                msg.setNodeID(succ.getNodeID());
+                msg.setNodeName(succ.getNodeName());
+                msg.setPort(succ.getPort());
+                msg.setNameOfFile(filename);
+                msg.setHashOfFile(replicaHash);
+                msg.setBytesOfFile(bytesOfFile);
+                msg.setPrimaryServer(isPrimary); // Set the primaryServer flag
+
+                activeNodesforFile.add(msg);
+                counter++;
+            }
+        }
+
+        return counter;
     }
 	
 	/**
@@ -123,7 +160,23 @@ public class FileManager {
 		
 		// save the metadata in the set activeNodesforFile.
 		
-		return activeNodesforFile;
+	    createReplicaFiles();
+
+	   
+	    for (int i = 0; i < numReplicas; i++) {
+	        BigInteger replicaHash = replicafiles[i];
+	        NodeInterface succ = chordnode.findSuccessor(replicaHash);
+
+	        if (succ != null) {
+	           
+	            Message msg = succ.getFilesMetadata(replicaHash);
+	            if (msg != null) {
+	                activeNodesforFile.add(msg);
+	            }
+	        }
+	    }
+
+	    return activeNodesforFile;
 	}
 	
 	/**
@@ -142,7 +195,14 @@ public class FileManager {
 		
 		// return the primary when found (i.e., use Util.getProcessStub to get the stub and return it)
 		
-		return null; 
+		for (Message msg : activeNodesforFile) {
+	        if (msg.isPrimaryServer()) {
+	            return Util.getProcessStub(msg.getNodeName(), msg.getPort());
+	        }
+	    }
+
+	    logger.error("No primary server found for file: " + filename);
+	    return null;
 	}
 	
     /**

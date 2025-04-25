@@ -79,6 +79,28 @@ public class MutualExclusion {
 		
 		// return permission
 		
+		queueack.clear();
+		mutexqueue.clear();
+
+		clock.increment();
+
+		message.setClock(clock.getClock());
+
+		WANTS_TO_ENTER_CS = true;
+
+		List<Message> activenodes = removeDuplicatePeersBeforeVoting();
+
+		multicastMessage(message, activenodes);
+
+		boolean permissionGranted = areAllMessagesReturned(activenodes.size());
+
+		if (permissionGranted) {
+			acquireLock(); 
+			node.broadcastUpdatetoPeers(updates); 
+			mutexqueue.clear();
+			return true;
+		}
+
 		return false;
 	}
 	
@@ -93,6 +115,17 @@ public class MutualExclusion {
 		
 		// call onMutexRequestReceived()
 		
+		for (Message peer : activenodes) {
+			try {
+				NodeInterface stub = Util.getProcessStub(peer.getNodeName(), peer.getPort());
+
+				if (stub != null) {
+					stub.onMutexRequestReceived(message);
+				}
+			} catch (Exception e) {
+				logger.error("Failed to multicast to " + peer.getNodeName() + " at port " + peer.getPort(), e);
+			}
+		}
 	}
 	
 	public void onMutexRequestReceived(Message message) throws RemoteException {
@@ -101,6 +134,15 @@ public class MutualExclusion {
 		
 		// if message is from self, acknowledge, and call onMutexAcknowledgementReceived()
 			
+		clock.increment();
+
+		if (message.getNodeID().equals(node.getNodeID())) {
+			message.setAcknowledged(true);
+			onMutexAcknowledgementReceived(message);
+			return;
+		}
+
+		
 		int caseid = -1;
 		
 		/* write if statement to transition to the correct caseid in the doDecisionAlgorithm */
@@ -112,6 +154,16 @@ public class MutualExclusion {
 			// caseid=2: Receiver wants to access resource but is yet to - compare own message clock to received message's clock
 		
 		// check for decision
+		
+		if (!CS_BUSY && !WANTS_TO_ENTER_CS) {
+			caseid = 0;
+		} else if (CS_BUSY) {
+			caseid = 1;
+		} else if (WANTS_TO_ENTER_CS) {
+			caseid = 2;
+		}
+
+		// 4. Kjør avgjørelsesalgoritmen med riktig case
 		doDecisionAlgorithm(message, mutexqueue, caseid);
 	}
 	
@@ -131,6 +183,10 @@ public class MutualExclusion {
 				
 				// send acknowledgement back by calling onMutexAcknowledgementReceived()
 				
+				NodeInterface stub = Util.getProcessStub(procName, port);  
+				message.setAcknowledged(true);                            
+				stub.onMutexAcknowledgementReceived(message);  
+				
 				break;
 			}
 		
@@ -138,6 +194,7 @@ public class MutualExclusion {
 			case 1: {
 				
 				// queue this message
+				queue.add(message);
 				break;
 			}
 			
@@ -158,6 +215,21 @@ public class MutualExclusion {
 				// if sender wins, acknowledge the message, obtain a stub and call onMutexAcknowledgementReceived()
 				
 				// if sender looses, queue it
+				
+				int senderClock = message.getClock();                      
+				int ownClock = node.getMessage().getClock();             
+
+				if (senderClock < ownClock || 
+					(senderClock == ownClock && message.getNodeID().compareTo(node.getNodeID()) < 0)) {
+					
+					// Avsender vinner
+					NodeInterface stub = Util.getProcessStub(procName, port);
+					message.setAcknowledged(true);
+					stub.onMutexAcknowledgementReceived(message);
+
+				} else {
+					queue.add(message);
+				}
 
 				break;
 			}
@@ -170,7 +242,7 @@ public class MutualExclusion {
 	public void onMutexAcknowledgementReceived(Message message) throws RemoteException {
 		
 		// add message to queueack
-		
+		queueack.add(message);
 	}
 	
 	// multicast release locks message to other processes including self
@@ -182,6 +254,15 @@ public class MutualExclusion {
 		// obtain a stub for each node from the registry
 		
 		// call releaseLocks()	
+		
+		for (Message m : activenodes) {
+			try {
+				NodeInterface stub = Util.getProcessStub(m.getNodeName(), m.getPort());
+				stub.releaseLocks();
+			} catch (Exception e) {
+				logger.error("Error releasing lock from " + m.getNodeName(), e);
+			}
+		}
 	}
 	
 	private boolean areAllMessagesReturned(int numvoters) throws RemoteException {
@@ -193,6 +274,11 @@ public class MutualExclusion {
 		
 		// return true if yes and false if no
 		
+		if (queueack.size() == numvoters) {
+			queueack.clear();
+			return true;
+		}
+
 		return false;
 	}
 	

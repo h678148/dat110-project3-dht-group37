@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import no.hvl.dat110.middleware.Message;
 import no.hvl.dat110.middleware.Node;
 import no.hvl.dat110.rpc.interfaces.NodeInterface;
+import no.hvl.dat110.util.Hash;
 import no.hvl.dat110.util.Util;
 
 /**
@@ -171,11 +172,25 @@ public class ChordProtocols {
 			// then: use chordnode to find the successor of k. (i.e., succnode = chordnode.findSuccessor(k))
 			
 			// check that succnode is not null, then add it to the finger table
+	
+			int m = Hash.bitSize(); 
+			chordnode.getFingerTable().clear();
 
-		} catch (RemoteException e) {
-			//
-		}
+			for (int i = 0; i < m; i++) { 
+			    BigInteger twoPower = new BigInteger("2").pow(i);
+			    BigInteger fingerID = chordnode.getNodeID().add(twoPower).mod(Hash.modulo());
+			    NodeInterface succ = chordnode.findSuccessor(fingerID);
+
+			    if (succ != null) {
+			        chordnode.getFingerTable().add(succ);
+			    }
+			}
+
+	    } catch (RemoteException e) {
+	        logger.error("Error while fixing finger table: " + e.getMessage());
+	    }
 	}
+	
 
 	protected NodeInterface getChordnode() {
 		return chordnode;

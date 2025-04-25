@@ -30,6 +30,16 @@ public class Hash {
 		
 		// return the BigInteger
 		
+		try {
+			MessageDigest md = MessageDigest.getInstance("MD5");
+			byte[] digest = md.digest(entity.getBytes());
+			String hex = toHex(digest);
+			hashint = new BigInteger(hex, 16);
+			
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		
 		return hashint;
 	}
 	
@@ -43,17 +53,21 @@ public class Hash {
 		
 		// return the address size
 		
-		return null;
+		return BigInteger.valueOf(2).pow(bitSize());
 	}
 	
 	public static int bitSize() {
-		
-		int digestlen = 0;
-		
-		// find the digest length
-		
-		return digestlen*8;
+	    try {
+	        MessageDigest md = MessageDigest.getInstance("MD5");
+	        int digestlen = md.getDigestLength(); 
+
+	        return digestlen * 8;
+
+	    } catch (NoSuchAlgorithmException e) {
+	        throw new RuntimeException("MD5-algoritmen er ikke tilgjengelig", e);
+	    }
 	}
+
 	
 	public static String toHex(byte[] digest) {
 		StringBuilder strbuilder = new StringBuilder();
@@ -61,6 +75,10 @@ public class Hash {
 			strbuilder.append(String.format("%02x", b&0xff));
 		}
 		return strbuilder.toString();
+	}
+	
+	public static BigInteger modulo() {
+	    return BigInteger.TWO.pow(bitSize());
 	}
 
 }

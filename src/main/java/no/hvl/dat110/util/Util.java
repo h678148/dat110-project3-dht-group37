@@ -45,9 +45,17 @@ public class Util {
 		
 		// Task: given an identifier, id: check whether pred < id <= node
 		
-		return false;
-
-	}
+		 if (lower.compareTo(upper) < 0) {
+		        // Normal case: lower < upper
+		        return (id.compareTo(lower) >= 0 && id.compareTo(upper) <= 0);
+		    } else if (lower.compareTo(upper) > 0) {
+		        // Wrap-around case: interval wraps around the ring
+		        return (id.compareTo(lower) >= 0 || id.compareTo(upper) <= 0);
+		    } else {
+		        // lower == upper: entire ring, always true
+		        return true;
+		    }
+		}
 	
 	public static List<String> toString(List<NodeInterface> list) throws RemoteException {
 		List<String> nodestr = new ArrayList<String>();
